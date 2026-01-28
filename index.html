@@ -14,7 +14,7 @@
       { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
     </script>
     <style>
-        body { background-color: #0f172a; color: white; overscroll-behavior: none; font-family: sans-serif; }
+        body { background-color: #0f172a; color: white; overscroll-behavior: none; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
         .grayscale-mode { filter: grayscale(100%); }
         .markdown-body h1, .markdown-body h2 { color: #2dd4bf; margin-top: 1em; margin-bottom: 0.5em; font-weight: bold; }
         .markdown-body ul { list-style-type: disc; padding-left: 1.5em; }
@@ -24,6 +24,8 @@
             background-image: linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px), 
                               linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px);
         }
+        /* ボタン押し込み時のアニメーション */
+        button:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -34,8 +36,13 @@
         const { useState, useEffect, useRef } = React;
 
         const App = () => {
-            const [refImage, setRefImage] = useState(null);
-            const [sketchImage, setSketchImage] = useState(null);
+            // 画像データ（表示用URLとAI用Base64を分ける）
+            const [refImageSrc, setRefImageSrc] = useState(null);
+            const [refImageBase64, setRefImageBase64] = useState(null);
+            
+            const [sketchImageSrc, setSketchImageSrc] = useState(null);
+            const [sketchImageBase64, setSketchImageBase64] = useState(null);
+
             const [apiKey, setApiKey] = useState(localStorage.getItem("gemini_api_key") || "");
             const [showSettings, setShowSettings] = useState(false);
             const [mode, setMode] = useState("draw");
@@ -61,45 +68,74 @@
 
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
+            // File Reader Helper (Base64変換用)
+            const fileToBase64 = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = (error) => reject(error);
+                });
+            };
+
             const handleSaveKey = () => {
                 localStorage.setItem("gemini_api_key", apiKey);
                 setShowSettings(false);
                 alert("APIキーを保存しました！");
             };
 
-            const handleImageUpload = (e, setter) => {
+            // 画像アップロード処理（軽量化：表示にはObjectURLを使う）
+            const handleImageUpload = async (e, setSrc, setBase64) => {
                 const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => setter(e.target.result);
-                    reader.readAsDataURL(file);
+                if (!file) return;
+
+                // 1. すぐに表示（メモリに優しい）
+                const objectUrl = URL.createObjectURL(file);
+                setSrc(objectUrl);
+
+                // 2. 裏でAI用に変換しておく
+                try {
+                    const base64 = await fileToBase64(file);
+                    setBase64(base64);
+                } catch (err) {
+                    console.error("画像変換エラー", err);
                 }
             };
 
-            // ランダム画像取得機能（CORS対応のためBlob経由でBase64化）
-            const fetchRandomImage = async () => {
+            // ランダム画像取得（バグ修正版）
+            const fetchRandomImage = async (e) => {
+                if(e) e.preventDefault(); // ページ遷移防止
                 setIsImageLoading(true);
+                setRefImageSrc(null); // 一旦クリア
+                
                 try {
-                    // Picsumからランダム画像を取得（人物や風景などランダム）
-                    const response = await fetch('https://picsum.photos/600/800');
+                    // キャッシュ防止のためタイムスタンプを付与
+                    const response = await fetch('https://picsum.photos/600/800?' + new Date().getTime());
                     const blob = await response.blob();
+                    
+                    // 表示用
+                    const objectUrl = URL.createObjectURL(blob);
+                    setRefImageSrc(objectUrl);
+                    
+                    // AI用
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        setRefImage(reader.result);
+                        setRefImageBase64(reader.result);
                         setIsImageLoading(false);
                         setTimer(0);
-                        setIsActive(true); // 画像が出たらタイマー自動スタート
+                        setIsActive(true); // 画像が出たらスタート
                     };
                     reader.readAsDataURL(blob);
+
                 } catch (error) {
-                    alert("画像の取得に失敗しました。もう一度試してください。");
+                    alert("画像の取得に失敗しました。通信環境を確認してください。");
                     setIsImageLoading(false);
                 }
             };
 
             const runCritique = async () => {
                 if (!apiKey) { alert("設定からAPIキーを入力してください！"); setShowSettings(true); return; }
-                if (!refImage || !sketchImage) { alert("お手本と自分の絵の両方が必要です。"); return; }
+                if (!refImageBase64 || !sketchImageBase64) { alert("お手本と自分の絵の両方が必要です。"); return; }
                 
                 setIsLoading(true);
                 try {
@@ -108,12 +144,12 @@
                     
                     const result = await model.generateContent([
                         "あなたは美大のデッサン講師です。1枚目のお手本と2枚目のユーザーのスケッチを比較し、日本語で厳しくも愛のある添削をしてください。良い点2つ、改善点2つ、具体的な練習法1つをMarkdown形式で見やすく出力してください。",
-                        { inlineData: { data: refImage.split(',')[1], mimeType: "image/jpeg" } },
-                        { inlineData: { data: sketchImage.split(',')[1], mimeType: "image/jpeg" } }
+                        { inlineData: { data: refImageBase64.split(',')[1], mimeType: "image/jpeg" } },
+                        { inlineData: { data: sketchImageBase64.split(',')[1], mimeType: "image/jpeg" } }
                     ]);
                     setCritique((await result.response).text());
                 } catch (error) {
-                    setCritique("エラー：APIキーを確認するか、画像サイズを小さくしてください。\n" + error.message);
+                    setCritique("エラーが発生しました。画像が大きすぎるか、APIキーが間違っている可能性があります。\n" + error.message);
                 } finally {
                     setIsLoading(false);
                 }
@@ -127,10 +163,10 @@
                     <div className="p-4 flex justify-between items-center bg-slate-900/90 backdrop-blur sticky top-0 z-50 border-b border-slate-800">
                         <h1 className="text-xl font-bold bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent">Sketch Studio AI</h1>
                         <div className="flex gap-2">
-                            <button onClick={() => setMode(mode === "draw" ? "critique" : "draw")} className="px-3 py-1 bg-slate-800 rounded-full text-xs font-bold border border-slate-700">
+                            <button type="button" onClick={() => setMode(mode === "draw" ? "critique" : "draw")} className="px-3 py-1 bg-slate-800 rounded-full text-xs font-bold border border-slate-700 active:scale-95">
                                 {mode === "draw" ? "添削へ" : "描画へ"}
                             </button>
-                            <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-slate-800 rounded-full text-gray-400"><i data-lucide="settings" className="w-5 h-5"></i></button>
+                            <button type="button" onClick={() => setShowSettings(!showSettings)} className="p-2 bg-slate-800 rounded-full text-gray-400 active:scale-95"><i data-lucide="settings" className="w-5 h-5"></i></button>
                         </div>
                     </div>
 
@@ -140,7 +176,7 @@
                             <div className="bg-slate-800 p-6 rounded-2xl w-full max-w-sm border border-slate-700">
                                 <h2 className="text-lg font-bold mb-4 text-white">設定</h2>
                                 <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4" placeholder="Gemini API Key" />
-                                <button onClick={handleSaveKey} className="w-full bg-teal-600 text-white py-2 rounded-lg font-bold">保存</button>
+                                <button type="button" onClick={handleSaveKey} className="w-full bg-teal-600 text-white py-2 rounded-lg font-bold">保存</button>
                             </div>
                         </div>
                     )}
@@ -155,9 +191,9 @@
                                             <i data-lucide="loader-2" className="w-8 h-8 animate-spin"></i>
                                             <span className="text-xs">お題を選定中...</span>
                                         </div>
-                                    ) : refImage ? (
+                                    ) : refImageSrc ? (
                                         <div className="relative w-full h-full flex items-center justify-center">
-                                            <img src={refImage} className={`max-w-full max-h-full object-contain ${isGrayscale ? 'grayscale-mode' : ''}`} />
+                                            <img src={refImageSrc} className={`max-w-full max-h-full object-contain ${isGrayscale ? 'grayscale-mode' : ''}`} />
                                             {showGrid && <div className="absolute inset-0 grid-overlay pointer-events-none"></div>}
                                         </div>
                                     ) : (
@@ -166,19 +202,20 @@
                                             <p>お題を表示します</p>
                                         </div>
                                     )}
-                                    {/* Action Buttons Overlay */}
+                                    
+                                    {/* Action Buttons */}
                                     {showControls && (
                                         <div className="absolute bottom-4 right-4 flex gap-2">
-                                            <button onClick={fetchRandomImage} className="bg-teal-600/90 hover:bg-teal-500 text-white p-3 rounded-full shadow-lg backdrop-blur-sm border border-white/10 flex items-center gap-2">
+                                            <button type="button" onClick={fetchRandomImage} disabled={isImageLoading} className="bg-teal-600/90 hover:bg-teal-500 text-white p-3 rounded-full shadow-lg backdrop-blur-sm border border-white/10 flex items-center gap-2 active:scale-95 transition-transform disabled:opacity-50">
                                                 <i data-lucide="shuffle" className="w-5 h-5"></i>
                                                 <span className="text-xs font-bold">ランダムお題</span>
                                             </button>
-                                            <button onClick={() => refInputRef.current.click()} className="bg-slate-700/80 text-white p-3 rounded-full shadow-lg backdrop-blur-sm border border-white/10">
+                                            <button type="button" onClick={() => refInputRef.current.click()} className="bg-slate-700/80 text-white p-3 rounded-full shadow-lg backdrop-blur-sm border border-white/10 active:scale-95 transition-transform">
                                                 <i data-lucide="upload" className="w-5 h-5"></i>
                                             </button>
                                         </div>
                                     )}
-                                    <input type="file" ref={refInputRef} onChange={(e) => handleImageUpload(e, setRefImage)} className="hidden" accept="image/*" />
+                                    <input type="file" ref={refInputRef} onChange={(e) => handleImageUpload(e, setRefImageSrc, setRefImageBase64)} className="hidden" accept="image/*" />
                                 </div>
 
                                 {/* Controls */}
@@ -186,19 +223,19 @@
                                     <div className="bg-slate-800/90 rounded-2xl p-4 border border-slate-700 animate-fade-in">
                                         <div className="text-center text-4xl font-mono font-bold text-teal-400 mb-4">{formatTime(timer)}</div>
                                         <div className="flex justify-between px-2">
-                                            <button onClick={() => setIsActive(!isActive)} className="flex flex-col items-center gap-1 text-teal-400">
+                                            <button type="button" onClick={() => setIsActive(!isActive)} className="flex flex-col items-center gap-1 text-teal-400 w-12">
                                                 <i data-lucide={isActive ? "pause" : "play"} className="w-6 h-6"></i>
                                                 <span className="text-[10px]">{isActive ? "停止" : "開始"}</span>
                                             </button>
-                                            <button onClick={() => {setIsActive(false); setTimer(0);}} className="flex flex-col items-center gap-1 text-gray-400">
+                                            <button type="button" onClick={() => {setIsActive(false); setTimer(0);}} className="flex flex-col items-center gap-1 text-gray-400 w-12">
                                                 <i data-lucide="rotate-ccw" className="w-6 h-6"></i>
                                                 <span className="text-[10px]">リセット</span>
                                             </button>
-                                            <button onClick={() => setIsGrayscale(!isGrayscale)} className={`flex flex-col items-center gap-1 ${isGrayscale ? 'text-purple-400' : 'text-gray-400'}`}>
+                                            <button type="button" onClick={() => setIsGrayscale(!isGrayscale)} className={`flex flex-col items-center gap-1 w-12 ${isGrayscale ? 'text-purple-400' : 'text-gray-400'}`}>
                                                 <i data-lucide="eye" className="w-6 h-6"></i>
                                                 <span className="text-[10px]">白黒</span>
                                             </button>
-                                            <button onClick={() => setShowGrid(!showGrid)} className={`flex flex-col items-center gap-1 ${showGrid ? 'text-blue-400' : 'text-gray-400'}`}>
+                                            <button type="button" onClick={() => setShowGrid(!showGrid)} className={`flex flex-col items-center gap-1 w-12 ${showGrid ? 'text-blue-400' : 'text-gray-400'}`}>
                                                 <i data-lucide="grid" className="w-6 h-6"></i>
                                                 <span className="text-[10px]">グリッド</span>
                                             </button>
@@ -212,14 +249,14 @@
                             <div className="animate-fade-in flex flex-col gap-4">
                                 <div className="grid grid-cols-2 gap-2 h-40">
                                     <div className="bg-black rounded-lg border border-slate-700 overflow-hidden relative">
-                                        {refImage ? <img src={refImage} className="w-full h-full object-cover opacity-80" /> : <div className="flex items-center justify-center h-full text-xs text-gray-500">お題なし</div>}
+                                        {refImageSrc ? <img src={refImageSrc} className="w-full h-full object-cover opacity-80" /> : <div className="flex items-center justify-center h-full text-xs text-gray-500">お題なし</div>}
                                     </div>
-                                    <div onClick={() => sketchInputRef.current.click()} className="bg-slate-800 rounded-lg border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden">
-                                        {sketchImage ? <img src={sketchImage} className="w-full h-full object-cover" /> : <><i data-lucide="upload" className="w-8 h-8 text-gray-400 mb-1"></i><span className="text-xs text-gray-400">自分の絵</span></>}
+                                    <div onClick={() => sketchInputRef.current.click()} className="bg-slate-800 rounded-lg border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden active:bg-slate-700">
+                                        {sketchImageSrc ? <img src={sketchImageSrc} className="w-full h-full object-cover" /> : <><i data-lucide="upload" className="w-8 h-8 text-gray-400 mb-1"></i><span className="text-xs text-gray-400">自分の絵</span></>}
                                     </div>
-                                    <input type="file" ref={sketchInputRef} onChange={(e) => handleImageUpload(e, setSketchImage)} className="hidden" accept="image/*" />
+                                    <input type="file" ref={sketchInputRef} onChange={(e) => handleImageUpload(e, setSketchImageSrc, setSketchImageBase64)} className="hidden" accept="image/*" />
                                 </div>
-                                <button onClick={runCritique} disabled={isLoading} className={`w-full py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 ${isLoading ? 'bg-slate-700 text-gray-400' : 'bg-gradient-to-r from-teal-500 to-blue-600 text-white'}`}>
+                                <button type="button" onClick={runCritique} disabled={isLoading} className={`w-full py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform ${isLoading ? 'bg-slate-700 text-gray-400' : 'bg-gradient-to-r from-teal-500 to-blue-600 text-white'}`}>
                                     {isLoading ? <><i data-lucide="loader-2" className="animate-spin"></i> 思考中...</> : <><i data-lucide="sparkles"></i> 添削を開始</>}
                                 </button>
                                 {critique && <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700 shadow-xl markdown-body text-sm text-gray-200" dangerouslySetInnerHTML={{__html: marked.parse(critique)}}></div>}
