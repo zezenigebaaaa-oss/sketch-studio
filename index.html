@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sketch Studio Stable</title>
+    <title>Sketch Studio Origin</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -21,7 +21,7 @@
             background-color: #0f172a; 
             color: white; 
             overscroll-behavior: none; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
         .grayscale-mode { filter: grayscale(100%); }
@@ -32,10 +32,9 @@
             pointer-events: none;
         }
         .markdown-body h1, .markdown-body h2 { color: #2dd4bf; margin-top: 1em; margin-bottom: 0.5em; font-weight: bold; }
-        button:active { transform: scale(0.96); opacity: 0.9; transition: transform 0.1s; }
+        button:active { transform: scale(0.96); opacity: 0.9; }
         
-        /* カテゴリボタンのスタイル */
-        .cat-btn { font-size: 11px; padding: 6px 12px; border-radius: 999px; transition: all 0.2s; border: 1px solid #334155; }
+        .cat-btn { font-size: 11px; padding: 6px 12px; border-radius: 999px; border: 1px solid #334155; }
         .cat-btn.active { background-color: #0d9488; border-color: #2dd4bf; color: white; font-weight: bold; }
         .cat-btn.inactive { background-color: #1e293b; color: #94a3b8; }
     </style>
@@ -47,39 +46,36 @@
         import { GoogleGenerativeAI } from "@google/generative-ai";
         const { useState, useEffect, useRef } = React;
 
-        // ▼ 画像リスト（ここにURLを追加すれば好きなお題を増やせます）
+        // 高画質・人物画の厳選リスト
         const IMAGE_DB = {
             front: [
-                "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600",
-                "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600",
-                "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600",
-                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600",
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600",
-                "https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=600",
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600",
-                "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=600"
+                "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80",
+                "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&q=80",
+                "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=800&q=80",
+                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80",
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80",
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
+                "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&q=80"
             ],
             side: [
-                "https://images.unsplash.com/photo-1595152452543-e5cca283f58c?w=600",
-                "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600",
-                "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=600",
-                "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=600",
-                "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=600",
-                "https://images.unsplash.com/photo-1509967419530-3227011e2305?w=600"
+                "https://images.unsplash.com/photo-1534030347209-467a5b0ad3e6?w=800&q=80",
+                "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=800&q=80",
+                "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=800&q=80",
+                "https://images.unsplash.com/photo-1509967419530-3227011e2305?w=800&q=80",
+                "https://images.unsplash.com/photo-1595152452543-e5cca283f58c?w=800&q=80"
             ],
             angle: [
-                "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600",
-                "https://images.unsplash.com/photo-1504593811423-6dd665756598?w=600",
-                "https://images.unsplash.com/photo-1521119989659-a83eee488058?w=600",
-                "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600",
-                "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600"
+                "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&q=80",
+                "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=800&q=80",
+                "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=800&q=80",
+                "https://images.unsplash.com/photo-1504593811423-6dd665756598?w=800&q=80",
+                "https://images.unsplash.com/photo-1521119989659-a83eee488058?w=800&q=80"
             ]
         };
 
         const App = () => {
-            // State
             const [refUrl, setRefUrl] = useState(null);
-            const [category, setCategory] = useState("front"); // 初期は正面
+            const [category, setCategory] = useState("front");
             const [sketchFile, setSketchFile] = useState(null);
             const [sketchPreview, setSketchPreview] = useState(null);
             const [apiKey, setApiKey] = useState(localStorage.getItem("gemini_api_key") || "");
@@ -88,7 +84,6 @@
             const [critique, setCritique] = useState("");
             const [isLoading, setIsLoading] = useState(false);
             
-            // Tools
             const [gray, setGray] = useState(false);
             const [grid, setGrid] = useState(false);
             const [timer, setTimer] = useState(0);
@@ -106,51 +101,47 @@
 
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-            // Helpers for AI
-            const urlToBase64 = async (url) => {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                return new Promise(r => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => r(reader.result.split(',')[1]);
-                    reader.readAsDataURL(blob);
-                });
-            };
-            const fileToBase64 = (file) => new Promise((r, j) => {
-                const reader = new FileReader();
-                reader.onload = () => r(reader.result.split(',')[1]);
-                reader.onerror = j;
-                reader.readAsDataURL(file);
-            });
-
-            // ★ 新・ランダム機能（リストから選ぶだけなので絶対に落ちない）
+            // 【原点回帰】最もシンプルな画像設定処理
             const handleRandom = () => {
                 const list = IMAGE_DB[category];
-                const randomIndex = Math.floor(Math.random() * list.length);
-                const nextUrl = list[randomIndex];
-                
-                // 同じ画像が連続しないようにする工夫（オプション）
-                if (nextUrl === refUrl && list.length > 1) {
-                    handleRandom(); // もう一回引き直す
-                    return;
-                }
-                
+                // シンプルにURLを選ぶだけ（通信処理なし＝落ちない）
+                const nextUrl = list[Math.floor(Math.random() * list.length)];
                 setRefUrl(nextUrl);
                 setTimer(0);
                 setIsActive(true);
             };
 
+            // AI添削時のみ画像を変換（ここで初めて通信する）
+            const urlToBase64 = async (url) => {
+                const response = await fetch(url); // AIボタンを押した時だけ通信
+                const blob = await response.blob();
+                return new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const fileToBase64 = (file) => new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+
             const runCritique = async () => {
                 if (!apiKey) { setShowSettings(true); return; }
-                if (!refUrl || !sketchFile) { alert("お手本と自分の絵が必要です"); return; }
+                if (!refUrl || !sketchFile) { alert("画像が揃っていません"); return; }
                 setIsLoading(true); setCritique("");
                 try {
                     const genAI = new GoogleGenerativeAI(apiKey);
                     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    
+                    // ここで初めて重い処理をする
                     const refBase64 = await urlToBase64(refUrl);
                     const sketchBase64 = await fileToBase64(sketchFile);
+                    
                     const result = await model.generateContent([
-                        "デッサン講師として、1枚目（手本）と2枚目（生徒の絵）を比較し、Markdown形式で日本語で添削してください。構図やプロポーションに注目して。良い点2つ、改善点2つ、練習法1つ。",
+                        "デッサン講師として添削してください。構図、プロポーション、陰影について。良い点2つ、改善点2つ、練習法1つ。Markdownで。",
                         { inlineData: { data: refBase64, mimeType: "image/jpeg" } },
                         { inlineData: { data: sketchBase64, mimeType: "image/jpeg" } }
                     ]);
@@ -162,25 +153,24 @@
 
             return (
                 <div className="min-h-screen bg-slate-900 flex flex-col max-w-lg mx-auto pb-20 safe-area-inset-bottom">
-                    {/* Header */}
-                    <div className="p-4 bg-slate-900/95 backdrop-blur sticky top-0 z-50 flex justify-between items-center border-b border-slate-800">
-                        <span className="font-bold text-teal-400 text-lg">Sketch Studio</span>
+                    <div className="p-4 bg-slate-900/95 sticky top-0 z-50 flex justify-between items-center border-b border-slate-800">
+                        <span className="font-bold text-teal-400">Sketch Studio Origin</span>
                         <div className="flex gap-2">
-                            <button onClick={() => setMode(mode==="draw"?"critique":"draw")} className="bg-slate-800 px-3 py-1.5 rounded-full text-xs border border-slate-700 text-slate-300">
-                                {mode==="draw"?"添削モード":"描画モード"}
+                            <button onClick={() => setMode(mode==="draw"?"critique":"draw")} className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700">
+                                {mode==="draw"?"添削":"描画"}
                             </button>
-                            <button onClick={() => setShowSettings(!showSettings)} className="bg-slate-800 p-2 rounded-full border border-slate-700 text-slate-400">
-                                <i data-lucide="settings" className="w-5 h-5"></i>
+                            <button onClick={() => setShowSettings(!showSettings)} className="bg-slate-800 p-2 rounded-full border border-slate-700">
+                                <i data-lucide="settings" className="w-4 h-4 text-slate-400"></i>
                             </button>
                         </div>
                     </div>
 
                     {showSettings && (
                         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-6" onClick={()=>setShowSettings(false)}>
-                            <div className="bg-slate-800 w-full max-w-sm p-6 rounded-2xl border border-slate-700" onClick={e=>e.stopPropagation()}>
+                            <div className="bg-slate-800 w-full max-w-sm p-6 rounded-xl" onClick={e=>e.stopPropagation()}>
                                 <h2 className="text-white font-bold mb-4">Gemini APIキー</h2>
-                                <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 mb-4" placeholder="キーを入力" />
-                                <button onClick={()=>{localStorage.setItem("gemini_api_key", apiKey); setShowSettings(false);}} className="w-full bg-teal-600 py-3 rounded-lg text-white font-bold">保存して閉じる</button>
+                                <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="w-full bg-slate-900 p-3 rounded text-white border border-slate-600 mb-4" />
+                                <button onClick={()=>{localStorage.setItem("gemini_api_key", apiKey); setShowSettings(false);}} className="w-full bg-teal-600 py-3 rounded text-white font-bold">保存</button>
                             </div>
                         </div>
                     )}
@@ -188,89 +178,59 @@
                     <div className="flex-1 p-4 flex flex-col gap-4">
                         {mode === "draw" ? (
                             <>
-                                {/* 画像表示エリア */}
-                                <div className="flex-1 bg-black rounded-2xl overflow-hidden relative border border-slate-700 min-h-[45vh] flex items-center justify-center shadow-inner">
+                                <div className="flex-1 bg-black rounded-xl overflow-hidden relative border border-slate-700 min-h-[45vh] flex items-center justify-center">
                                     {refUrl ? (
-                                        <div className="relative w-full h-full flex items-center justify-center">
-                                            <img src={refUrl} className={`max-w-full max-h-full object-contain transition-all duration-300 ${gray?'grayscale-mode':''}`} alt="Ref" />
+                                        <>
+                                            <img src={refUrl} className={`max-w-full max-h-full object-contain ${gray?'grayscale-mode':''}`} />
                                             {grid && <div className="absolute inset-0 grid-overlay"></div>}
-                                        </div>
+                                        </>
                                     ) : (
-                                        <div className="flex flex-col items-center text-slate-500 opacity-70">
-                                            <i data-lucide="user" className="w-16 h-16 mb-2"></i>
-                                            <span className="text-sm font-bold">構図を選んでスタート</span>
-                                        </div>
+                                        <div className="text-slate-500 text-sm">構図を選んでスタート</div>
                                     )}
                                     <input type="file" ref={refInput} onChange={e => e.target.files[0] && setRefUrl(URL.createObjectURL(e.target.files[0]))} className="hidden" accept="image/*" />
                                 </div>
 
-                                {/* カテゴリ選択＆ランダムボタン */}
                                 {showMenu && (
-                                    <div className="flex flex-col gap-3 animate-fade-in-up">
-                                        {/* 構図選択ボタン */}
+                                    <div className="flex flex-col gap-3">
                                         <div className="flex justify-center gap-2">
                                             <button onClick={()=>setCategory('front')} className={`cat-btn ${category==='front'?'active':'inactive'}`}>正面</button>
                                             <button onClick={()=>setCategory('side')} className={`cat-btn ${category==='side'?'active':'inactive'}`}>横顔</button>
                                             <button onClick={()=>setCategory('angle')} className={`cat-btn ${category==='angle'?'active':'inactive'}`}>斜め</button>
                                         </div>
-
-                                        {/* お題＆アップロード */}
                                         <div className="flex gap-2">
-                                            <button onClick={handleRandom} className="flex-1 bg-teal-600 hover:bg-teal-500 text-white py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 font-bold transition-all active:scale-95">
+                                            <button onClick={handleRandom} className="flex-1 bg-teal-600 text-white py-3 rounded-xl shadow-lg flex justify-center items-center gap-2 font-bold active:scale-95">
                                                 <i data-lucide="shuffle" className="w-5 h-5"></i> お題を表示
                                             </button>
-                                            <button onClick={()=>refInput.current.click()} className="bg-slate-700/90 text-white w-14 rounded-xl shadow-lg border border-white/10 flex justify-center items-center active:scale-95">
+                                            <button onClick={()=>refInput.current.click()} className="bg-slate-700 text-white w-14 rounded-xl flex justify-center items-center active:scale-95">
                                                 <i data-lucide="upload" className="w-5 h-5"></i>
                                             </button>
                                         </div>
-
-                                        {/* コントロールパネル */}
-                                        <div className="bg-slate-800/90 backdrop-blur p-4 rounded-2xl border border-slate-700 shadow-xl mt-1">
-                                            <div className="text-center mb-3">
-                                                <span className="text-3xl font-mono text-teal-400 font-bold tracking-wider">{fmtTime(timer)}</span>
-                                            </div>
-                                            <div className="flex justify-between px-2">
-                                                <button onClick={()=>setIsActive(!isActive)} className={`flex flex-col items-center gap-1 w-12 transition-colors ${isActive?'text-teal-400':'text-slate-400'}`}>
-                                                    <i data-lucide={isActive?"pause":"play"}></i><span className="text-[10px]">{isActive?"停止":"開始"}</span>
-                                                </button>
-                                                <button onClick={()=>{setIsActive(false);setTimer(0);}} className="flex flex-col items-center gap-1 w-12 text-slate-400">
-                                                    <i data-lucide="rotate-ccw"></i><span className="text-[10px]">リセット</span>
-                                                </button>
-                                                <button onClick={()=>setGray(!gray)} className={`flex flex-col items-center gap-1 w-12 ${gray?'text-purple-400':'text-slate-400'}`}>
-                                                    <i data-lucide="eye"></i><span className="text-[10px]">白黒</span>
-                                                </button>
-                                                <button onClick={()=>setGrid(!grid)} className={`flex flex-col items-center gap-1 w-12 ${grid?'text-blue-400':'text-slate-400'}`}>
-                                                    <i data-lucide="grid"></i><span className="text-[10px]">枠線</span>
-                                                </button>
+                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-center">
+                                            <div className="text-2xl font-mono text-teal-400 font-bold mb-2">{fmtTime(timer)}</div>
+                                            <div className="flex justify-between px-4">
+                                                <button onClick={()=>setIsActive(!isActive)}><i data-lucide={isActive?"pause":"play"} className={isActive?"text-teal-400":"text-slate-400"}></i></button>
+                                                <button onClick={()=>{setIsActive(false);setTimer(0);}}><i data-lucide="rotate-ccw" className="text-slate-400"></i></button>
+                                                <button onClick={()=>setGray(!gray)}><i data-lucide="eye" className={gray?"text-purple-400":"text-slate-400"}></i></button>
+                                                <button onClick={()=>setGrid(!grid)}><i data-lucide="grid" className={grid?"text-blue-400":"text-slate-400"}></i></button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
-                                <button onClick={()=>setShowMenu(!showMenu)} className="text-xs text-slate-500 text-center py-2 opacity-80">
-                                    {showMenu ? "メニューを隠す" : "メニューを表示"}
-                                </button>
+                                <button onClick={()=>setShowMenu(!showMenu)} className="text-xs text-slate-500 text-center py-2">{showMenu ? "メニューを隠す" : "メニューを表示"}</button>
                             </>
                         ) : (
-                            /* 添削モード */
-                            <div className="flex flex-col gap-4 animate-fade-in">
-                                <div className="grid grid-cols-2 gap-3 h-40">
-                                    <div className="bg-black rounded-xl border border-slate-700 overflow-hidden relative">
-                                        {refUrl ? <img src={refUrl} className="w-full h-full object-cover opacity-80" /> : <div className="flex items-center justify-center h-full text-xs text-slate-500">お題なし</div>}
-                                        <div className="absolute bottom-0 left-0 bg-black/60 text-white text-[10px] px-2 py-1 font-bold">お手本</div>
-                                    </div>
-                                    <div onClick={()=>sketchInput.current.click()} className="bg-slate-800 rounded-xl border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden active:bg-slate-700">
-                                        {sketchPreview ? <img src={sketchPreview} className="w-full h-full object-cover" /> : <><i data-lucide="upload" className="w-8 h-8 text-slate-400 mb-2"></i><span className="text-xs text-slate-400 font-bold">自分の絵</span></>}
+                            <div className="flex flex-col gap-4">
+                                <div className="grid grid-cols-2 gap-2 h-40">
+                                    <div className="bg-black rounded border border-slate-700 overflow-hidden">{refUrl && <img src={refUrl} className="w-full h-full object-cover opacity-80" />}</div>
+                                    <div onClick={()=>sketchInput.current.click()} className="bg-slate-800 rounded border-2 border-dashed border-slate-600 flex items-center justify-center overflow-hidden">
+                                        {sketchPreview ? <img src={sketchPreview} className="w-full h-full object-cover" /> : <i data-lucide="upload" className="text-slate-400"></i>}
                                     </div>
                                     <input type="file" ref={sketchInput} onChange={e => {setSketchFile(e.target.files[0]); setSketchPreview(URL.createObjectURL(e.target.files[0]));}} className="hidden" accept="image/*" />
                                 </div>
-                                <button onClick={runCritique} disabled={isLoading} className={`w-full py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-3 text-lg transition-all active:scale-95 ${isLoading?'bg-slate-700 text-slate-400':'bg-gradient-to-r from-teal-500 to-blue-600 text-white'}`}>
+                                <button onClick={runCritique} disabled={isLoading} className={`w-full py-3 rounded-xl font-bold ${isLoading?'bg-slate-700 text-slate-400':'bg-teal-600 text-white'}`}>
                                     {isLoading ? "AI思考中..." : "添削を開始"}
                                 </button>
-                                {critique && (
-                                    <div className="bg-slate-800/80 backdrop-blur p-5 rounded-xl border border-slate-700 shadow-xl">
-                                        <div className="markdown-body text-sm text-slate-200 leading-relaxed" dangerouslySetInnerHTML={{__html: marked.parse(critique)}}></div>
-                                    </div>
-                                )}
+                                {critique && <div className="bg-slate-800 p-4 rounded border border-slate-700 markdown-body text-sm" dangerouslySetInnerHTML={{__html: marked.parse(critique)}}></div>}
                             </div>
                         )}
                     </div>
